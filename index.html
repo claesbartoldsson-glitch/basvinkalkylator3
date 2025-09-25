@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ästad Vingård – Basvinkalkylator (offline)</title>
+  <style>
+    :root{
+      --bg:#F6F7FB; --text:#111827; --muted:#6B7280; --border:#E5E7EB;
+      --input:#E3F2FD; --const:#F5F5F5; --output:#E8F5E9;
+      --green:#2E7D32; --blue:#64B5F6; --yellow:#FFE082; --mint:#81C784;
+    }
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial}
+    h1{font-size:20px;margin:0 0 12px;font-weight:700}
+    .container{max-width:1024px;margin:0 auto;padding:16px}
+    .grid{display:grid;gap:16px}
+    @media(min-width:860px){ .cols-2{grid-template-columns:1fr 1fr} }
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.04);padding:16px}
+    .card h2{margin:0 0 4px;font-size:14px;font-weight:600}
+    .card .sub{margin:0 0 12px;color:var(--muted);font-size:12px}
+    label{display:block;margin:8px 0}
+    .lab{display:block;margin-bottom:4px;color:var(--muted);font-size:12px}
+    .row{display:flex;align-items:center;gap:6px}
+    input[type=number]{width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;outline:none;background:#fff}
+    .input-card input[type=number]{background:var(--input)}
+    .const-card input[type=number]{background:var(--const)}
+    .sfx{font-size:12px;color:var(--muted)}
+    .pill{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--output);margin:6px 0}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:var(--green);margin-right:6px}
+    .muted{color:var(--muted);font-size:12px}
+    .btn{background:#2563EB;color:#fff;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+    .btn:active{transform:translateY(1px)}
+    .right{display:flex;justify-content:flex-end}
+    /* Chart */
+    .chart-wrap{width:100%;height:240px}
+    .legend{display:flex;gap:12px;align-items:center;margin-top:8px;font-size:12px;color:var(--text)}
+    .leg-dot{width:10px;height:10px;border-radius:999px;display:inline-block;margin-right:6px}
+    .ld-must{background:var(--mint)}
+    .ld-sugar{background:var(--yellow)}
+    .ld-rs{background:var(--blue)}
+    /* Print to PDF */
+    @media print{
+      .btn, .right{display:none}
+      body{background:#fff}
+      .card{page-break-inside:avoid}
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="calc-root">
+    <header><h1>Ästad Vingård – Basvinkalkylator</h1></header>
+
+    <div class="grid cols-2">
+      <div class="card input-card">
+        <h2>Input</h2><p class="sub">Det du fyller i</p>
+        <label><span class="lab">Vinvolym</span><span class="row"><input id="V" type="number" step="1" /><span class="sfx">L</span></span></label>
+        <label><span class="lab">Vinets alkohol</span><span class="row"><input id="A0" type="number" step="0.05" /><span class="sfx">%</span></span></label>
+        <label><span class="lab">RS i basvin</span><span class="row"><input id="Rv" type="number" step="0.1" /><span class="sfx">g/L</span></span></label>
+        <label><span class="lab">Mustens socker</span><span class="row"><input id="Sm" type="number" step="1" /><span class="sfx">g/L</span></span></label>
+        <label><span class="lab">Målsocker i blandningen</span><span class="row"><input id="St" type="number" step="1" /><span class="sfx">g/L</span></span></label>
+        <label><span class="lab">Slutlig alkohol mål</span><span class="row"><input id="Af" type="number" step="0.05" /><span class="sfx">%</span></span></label>
+      </div>
+
+      <div class="card const-card">
+        <h2>Antaganden</h2><p class="sub">Justera enligt labb/linje</p>
+        <label><span class="lab">g/L per 1 %-vol</span><span class="row"><input id="gPerPct" type="number" step="0.05" /></span></label>
+        <label><span class="lab">Densitet sackaros</span><span class="row"><input id="rho" type="number" step="1" /><span class="sfx">g/L</span></span></label>
+        <label><span class="lab">Tryckfaktor (bar per g/L jäsbart socker)</span><span class="row"><input id="pressureFactor" type="number" step="0.01" /></span></label>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h2>Resultat</h2><p class="sub">Uträknade värden</p>
+        <div class="pill"><span class="muted">Total målvolym</span><span><span class="dot"></span><strong id="T">–</strong> L</span></div>
+        <div class="pill"><span class="muted">Mustvolym</span><span><span class="dot"></span><strong id="M">–</strong> L</span></div>
+        <div class="pill"><span class="muted">Tillsatt socker</span><span><span class="dot"></span><strong id="S">–</strong> g</span></div>
+        <div class="pill"><span class="muted">Teoretiskt tryck från jäsning</span><span><span class="dot"></span><strong id="P">–</strong> bar</span></div>
+        <div id="feasible" class="muted" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="card">
+        <h2>Socker per liter — källfördelning</h2>
+        <div class="chart-wrap"><svg id="chart" width="100%" height="100%" aria-label="Socker per liter källor"></svg></div>
+        <div class="legend">
+          <span><i class="leg-dot ld-must"></i>Socker från must</span>
+          <span><i class="leg-dot ld-sugar"></i>Socker från strösocker</span>
+          <span><i class="leg-dot ld-rs"></i>RS från basvin</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="right" style="margin-top:8px">
+      <button class="btn" onclick="window.print()">Skriv ut / Spara som PDF</button>
+    </div>
+  </div>
+
+  <script>
+    const el = (id)=>document.getElementById(id);
+    const inputs = {
+      V: el('V'), A0: el('A0'), Rv: el('Rv'), Sm: el('Sm'), St: el('St'), Af: el('Af'),
+      gPerPct: el('gPerPct'), rho: el('rho'), pressureFactor: el('pressureFactor'),
+    };
+    // Defaults
+    inputs.V.value = 1000;
+    inputs.A0.value = 11.5;
+    inputs.Rv.value = 3;
+    inputs.Sm.value = 200;
+    inputs.St.value = 24;
+    inputs.Af.value = 12.5;
+    inputs.gPerPct.value = 16.5;
+    inputs.rho.value = 1590;
+    inputs.pressureFactor.value = 0.25;
+
+    function toNum(v){ const n = Number(v); return Number.isFinite(n)? n : 0; }
+
+    function compute(V, A0, Rv, Sm, St, Af, gPerPct, rho){
+      const B10 = (Af - St / gPerPct) / 100;
+      const A0f = A0 / 100;
+      const T = (V * A0f) / B10;
+      const numeratorM = St * T - V * Rv - rho * (T - V);
+      const denomM = Sm - rho;
+      const M = numeratorM / denomM;
+      const S = rho * (T - V - M);
+      const totalVol = V + M + S / rho;
+      const blendSugar_gL = (M * Sm + S + V * Rv) / totalVol;
+      const finalAlcohol_pct = (V * A0f) / totalVol * 100 + (St / gPerPct);
+      const feasible = M >= 0 && S >= 0 && isFinite(M) && isFinite(S) && B10 > 0 && denomM !== 0;
+      return {T,M,S, feasible, blendSugar_gL, finalAlcohol_pct, totalVol, B10};
+    }
+
+    function update(){
+      const V = toNum(inputs.V.value);
+      const A0 = toNum(inputs.A0.value);
+      const Rv = toNum(inputs.Rv.value);
+      const Sm = toNum(inputs.Sm.value);
+      const St = toNum(inputs.St.value);
+      const Af = toNum(inputs.Af.value);
+      const gPerPct = toNum(inputs.gPerPct.value);
+      const rho = toNum(inputs.rho.value);
+      const pressureFactor = toNum(inputs.pressureFactor.value);
+
+      const out = compute(V,A0,Rv,Sm,St,Af,gPerPct,rho);
+
+      el('T').textContent = isFinite(out.T)? out.T.toFixed(2): '–';
+      el('M').textContent = isFinite(out.M)? out.M.toFixed(2): '–';
+      el('S').textContent = isFinite(out.S)? Math.round(out.S).toString(): '–';
+      const sugarFromMustPerL = (out.M * Sm) / out.T;
+      const sugarFromSugarPerL = out.S / out.T;
+      const rsFromWinePerL = (V * Rv) / out.T;
+      const fermentableSugarPerL = sugarFromMustPerL + sugarFromSugarPerL + rsFromWinePerL;
+      el('P').textContent = (pressureFactor * fermentableSugarPerL).toFixed(2);
+
+      const feas = el('feasible');
+      if(!out.feasible){
+        feas.textContent = "Kombinationsvärdena är omöjliga. Justera mustsocker, vinets alkohol, målsocker eller slutlig alkohol.";
+        feas.style.color = "#b91c1c";
+      } else {
+        feas.textContent = "";
+      }
+
+      drawBars([
+        { key:"Must", value: sugarFromMustPerL, color: getComputedStyle(document.documentElement).getPropertyValue('--mint').trim() },
+        { key:"Socker", value: sugarFromSugarPerL, color: getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim() },
+        { key:"RS vin", value: rsFromWinePerL, color: getComputedStyle(document.documentElement).getPropertyValue('--blue').trim() },
+      ], Math.max(St, fermentableSugarPerL));
+    }
+
+    function drawBars(data, maxY){
+      const svg = el('chart');
+      const W = svg.clientWidth || 600, H = svg.clientHeight || 240;
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+      const padding = {left: 38, right: 10, top: 10, bottom: 28};
+      const innerW = W - padding.left - padding.right;
+      const innerH = H - padding.top - padding.bottom;
+
+      // Axis Y ticks
+      const ticks = 5;
+      for(let i=0;i<=ticks;i++){
+        const yVal = (maxY/ticks)*i;
+        const y = H - padding.bottom - (yVal/maxY)*innerH;
+        const line = document.createElementNS(svg.namespaceURI,"line");
+        line.setAttribute("x1", padding.left); line.setAttribute("x2", W - padding.right);
+        line.setAttribute("y1", y); line.setAttribute("y2", y);
+        line.setAttribute("stroke", "#EEE");
+        svg.appendChild(line);
+
+        const txt = document.createElementNS(svg.namespaceURI,"text");
+        txt.setAttribute("x", padding.left - 6);
+        txt.setAttribute("y", y + 4);
+        txt.setAttribute("text-anchor","end");
+        txt.setAttribute("font-size","11");
+        txt.setAttribute("fill","#6B7280");
+        txt.textContent = maxY ? yVal.toFixed(0) : "0";
+        svg.appendChild(txt);
+      }
+
+      // Bars
+      const barW = innerW / (data.length*1.6);
+      const gap = barW * 0.6;
+      data.forEach((d, i)=>{
+        const x = padding.left + i*(barW+gap) + gap*0.5;
+        const h = maxY ? Math.max(0,(d.value/maxY)*innerH) : 0;
+        const y = H - padding.bottom - h;
+
+        const rect = document.createElementNS(svg.namespaceURI,"rect");
+        rect.setAttribute("x", x);
+        rect.setAttribute("y", y);
+        rect.setAttribute("width", barW);
+        rect.setAttribute("height", h);
+        rect.setAttribute("fill", d.color);
+        rect.setAttribute("rx","6");
+        svg.appendChild(rect);
+
+        const label = document.createElementNS(svg.namespaceURI,"text");
+        label.setAttribute("x", x + barW/2);
+        label.setAttribute("y", y - 6);
+        label.setAttribute("text-anchor","middle");
+        label.setAttribute("font-size","11");
+        label.setAttribute("fill","#111827");
+        label.textContent = isFinite(d.value) ? d.value.toFixed(2) + " g/L" : "–";
+        svg.appendChild(label);
+
+        const cat = document.createElementNS(svg.namespaceURI,"text");
+        cat.setAttribute("x", x + barW/2);
+        cat.setAttribute("y", H - 8);
+        cat.setAttribute("text-anchor","middle");
+        cat.setAttribute("font-size","11");
+        cat.setAttribute("fill","#6B7280");
+        cat.textContent = d.key;
+        svg.appendChild(cat);
+      });
+    }
+
+    Object.values(inputs).forEach(inp=>{ inp.addEventListener('input', update); inp.addEventListener('change', update); });
+    update();
+    let rAF; window.addEventListener('resize', ()=>{ cancelAnimationFrame(rAF); rAF=requestAnimationFrame(update); });
+  </script>
+</body>
+</html>
